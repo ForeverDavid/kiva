@@ -86,25 +86,27 @@ void Domain::setDomain(Foundation &foundation)
 
         for (std::size_t b = 0; b < foundation.blocks.size(); b++)
         {
-          if (boost::geometry::within(Point(meshX.centers[i],meshY.centers[j]), foundation.blocks[b].polygon) &&
-            isGreaterThan(meshZ.centers[k], foundation.blocks[b].zMin) &&
-            isLessThan(meshZ.centers[k], foundation.blocks[b].zMax))
-          {
-            cell[i][j][k].density = foundation.blocks[b].material.density;
-            cell[i][j][k].specificHeat = foundation.blocks[b].material.specificHeat;
-            cell[i][j][k].conductivity = foundation.blocks[b].material.conductivity;
-
-            cell[i][j][k].blockPtr = &foundation.blocks[b];
-
-            if (foundation.blocks[b].blockType == Block::INTERIOR_AIR)
+          if (cell[i][j][k].cellType != Cell::ZERO_THICKNESS) {
+            if (boost::geometry::within(Point(meshX.centers[i],meshY.centers[j]), foundation.blocks[b].polygon) &&
+              isGreaterThan(meshZ.centers[k], foundation.blocks[b].zMin) &&
+              isLessThan(meshZ.centers[k], foundation.blocks[b].zMax))
             {
-              cell[i][j][k].cellType = Cell::INTERIOR_AIR;
-            }
-            else if (foundation.blocks[b].blockType == Block::EXTERIOR_AIR)
-            {
-              cell[i][j][k].cellType = Cell::EXTERIOR_AIR;
-            } else {
-              cell[i][j][k].cellType = Cell::NORMAL;
+              cell[i][j][k].density = foundation.blocks[b].material.density;
+              cell[i][j][k].specificHeat = foundation.blocks[b].material.specificHeat;
+              cell[i][j][k].conductivity = foundation.blocks[b].material.conductivity;
+
+              cell[i][j][k].blockPtr = &foundation.blocks[b];
+
+              if (foundation.blocks[b].blockType == Block::INTERIOR_AIR)
+              {
+                cell[i][j][k].cellType = Cell::INTERIOR_AIR;
+              }
+              else if (foundation.blocks[b].blockType == Block::EXTERIOR_AIR)
+              {
+                cell[i][j][k].cellType = Cell::EXTERIOR_AIR;
+              } else {
+                cell[i][j][k].cellType = Cell::NORMAL;
+              }
             }
           }
         }
@@ -278,6 +280,7 @@ void Domain::setDomain(Foundation &foundation)
     {
       for (std::size_t k = 0; k < nZ; k++)
       {
+        auto& c = cell[i][j][k];
 
         // PDE Coefficients
 
@@ -285,43 +288,69 @@ void Domain::setDomain(Foundation &foundation)
           // Radial X terms
           if (foundation.coordinateSystem == Foundation::CS_CYLINDRICAL)
           {
-            cell[i][j][k].cxp_c = (getDXM(i)*getKXP(i,j,k))/
+            c.cxp_c = (getDXM(i)*getKXP(i,j,k))/
                 ((getDXM(i) + getDXP(i))*getDXP(i));
-            cell[i][j][k].cxm_c = (getDXP(i)*getKXM(i,j,k))/
+            c.cxm_c = (getDXP(i)*getKXM(i,j,k))/
                 ((getDXM(i) + getDXP(i))*getDXM(i));
           }
           else
           {
-            cell[i][j][k].cxp_c = 0.0;
-            cell[i][j][k].cxm_c = 0.0;
+            c.cxp_c = 0.0;
+            c.cxm_c = 0.0;
           }
 
           // Cartesian X terms
-          cell[i][j][k].cxp = (2*getKXP(i,j,k))/
+          c.cxp = (2*getKXP(i,j,k))/
               ((getDXM(i) + getDXP(i))*getDXP(i));
-          cell[i][j][k].cxm = -1*(2*getKXM(i,j,k))/
+          c.cxm = -1*(2*getKXM(i,j,k))/
               ((getDXM(i) + getDXP(i))*getDXM(i));
         }
 
         // Cartesian Z terms
-        cell[i][j][k].czp = (2*getKZP(i,j,k))/
+        c.czp = (2*getKZP(i,j,k))/
             ((getDZM(k) + getDZP(k))*getDZP(k));
-        cell[i][j][k].czm = -1*(2*getKZM(i,j,k))/
+        c.czm = -1*(2*getKZM(i,j,k))/
             ((getDZM(k) + getDZP(k))*getDZM(k));
 
         // Cartesian Y terms
         if (foundation.numberOfDimensions == 3)
         {
-          cell[i][j][k].cyp = (2*getKYP(i,j,k))/
+          c.cyp = (2*getKYP(i,j,k))/
               ((getDYM(j) + getDYP(j))*getDYP(j));
-          cell[i][j][k].cym = -1*(2*getKYM(i,j,k))/
+          c.cym = -1*(2*getKYM(i,j,k))/
               ((getDYM(j) + getDYP(j))*getDYM(j));
         }
         else
         {
-          cell[i][j][k].cyp = 0.0;
-          cell[i][j][k].cym = 0.0;
+          c.cyp = 0.0;
+          c.cym = 0.0;
         }
+
+        /*
+        auto& k_c = c.conductivity;
+        auto& cp = c.specificHeat;
+        auto& rho = c.density;
+        auto dx2 = meshX.deltas[i]*meshX.deltas[i];
+        auto dy2 = meshY.deltas[j]*meshY.deltas[j];
+        auto dz2 = meshZ.deltas[k]*meshZ.deltas[k];
+
+        // Fourier numbers (divided by delta t)
+        if (foundation.numberOfDimensions == 1) {
+          c.fox = 0.0;
+          c.foy = 0.0;
+          c.foz = k_c/(cp*rho*dz2);
+        }
+        else if (foundation.numberOfDimensions == 2) {
+          c.fox = k_c/(cp*rho*dx2);
+          c.foy = 0.0;
+          c.foz = k_c/(cp*rho*dz2);
+        }
+        else {// if (foundation.numberOfDimensions == 2)
+          c.fox = k_c/(cp*rho*dx2);
+          c.foy = k_c/(cp*rho*dy2);
+          c.foz = k_c/(cp*rho*dz2);
+        }
+        */
       }
     }
   }

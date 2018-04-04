@@ -1981,7 +1981,7 @@ void Ground::calculateSurfaceAverages(){
     }
 
     double totalHeatTransferRate = 0.0;
-    //double TA = 0;
+    double TA = 0;
     double HA = 0.0;
     double totalArea = 0.0;
 
@@ -2022,7 +2022,7 @@ void Ground::calculateSurfaceAverages(){
 
             totalArea += A;
             totalHeatTransferRate += h*A*(Tair - TNew[i][j][k]);
-            //TA += TNew[i][j][k]*A;
+            TA += TNew[i][j][k]*A;
             HA += h*A;
 
             #ifdef PRNTSURF
@@ -2049,6 +2049,7 @@ void Ground::calculateSurfaceAverages(){
       double hAvg = HA/totalArea;
 
       groundOutput.outputValues[{surface,GroundOutput::OT_TEMP}] = Tavg;
+      groundOutput.outputValues[{surface,GroundOutput::OT_AVG_TEMP}] = TA/totalArea;
       groundOutput.outputValues[{surface,GroundOutput::OT_FLUX}] = totalHeatTransferRate/totalArea;
       groundOutput.outputValues[{surface,GroundOutput::OT_RATE}] = totalHeatTransferRate/totalArea*surfaceArea;
       groundOutput.outputValues[{surface,GroundOutput::OT_CONV}] = hAvg;
@@ -2057,6 +2058,7 @@ void Ground::calculateSurfaceAverages(){
     }
     else {
       groundOutput.outputValues[{surface,GroundOutput::OT_TEMP}] = Tair;
+      groundOutput.outputValues[{surface,GroundOutput::OT_AVG_TEMP}] = Tair;
       groundOutput.outputValues[{surface,GroundOutput::OT_FLUX}] = 0.0;
       groundOutput.outputValues[{surface,GroundOutput::OT_RATE}] = 0.0;
       groundOutput.outputValues[{surface,GroundOutput::OT_CONV}] = 0.0;
@@ -2592,18 +2594,21 @@ void Ground::setInteriorRadiationBoundaryConditions()
         || foundation.surfaces[s].type == Surface::ST_SLAB_PERIM
         || foundation.surfaces[s].type == Surface::ST_WALL_INT)
     {
-      for (std::size_t index = 0; index < foundation.surfaces[s].indices.size(); index++)
+      double absRadiation;
+      if (foundation.surfaces[s].type == Surface::ST_WALL_INT) {
+        absRadiation = bcs.wallAbsRadiation;
+      }
+      else {
+        absRadiation = bcs.slabAbsRadiation;
+      }
+
+      for (std::size_t index = 0; index < foundation.surfaces[s].indices.size(); index++) // TODO: Change to auto& and distribute longwave to individual cells
       {
         std::size_t i = std::get<0>(foundation.surfaces[s].indices[index]);
         std::size_t j = std::get<1>(foundation.surfaces[s].indices[index]);
         std::size_t k = std::get<2>(foundation.surfaces[s].indices[index]);
 
-        if (foundation.surfaces[s].type == Surface::ST_WALL_INT) {
-          domain.cell[i][j][k].heatGain = bcs.wallAbsRadiation;
-        }
-        else {
-          domain.cell[i][j][k].heatGain = bcs.slabAbsRadiation;
-        }
+        domain.cell[i][j][k].heatGain = absRadiation;
       }
     }
   }

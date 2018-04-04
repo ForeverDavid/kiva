@@ -37,6 +37,11 @@ public:
   double czp;
   double czm;
 
+  // test Fourier numbers (divided by delta t)
+  /*double fox;
+  double foy;
+  double foz;*/
+
   // organizational properties
   enum CellType
   {
